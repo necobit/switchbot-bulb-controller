@@ -1,0 +1,12 @@
+#ifndef SECRETS_H
+#define SECRETS_H
+
+// WiFi設定
+#define WIFI_SSID "YOUR_WIFI_SSID"
+#define WIFI_PASS "YOUR_WIFI_PASSWORD"
+
+// SwitchBot API認証情報（SwitchBotアプリから取得）
+#define SWITCHBOT_TOKEN "YOUR_SWITCHBOT_TOKEN"
+#define SWITCHBOT_SECRET "YOUR_SWITCHBOT_SECRET"
+
+#endif // SECRETS_H
