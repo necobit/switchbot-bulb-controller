@@ -17,7 +17,18 @@ M5Stack Tab5 (ESP32-P4) で SwitchBot スマート電球を制御するアプリ
 
 ## セットアップ
 
-### 1. secrets.h の作成
+### 1. SwitchBot API トークン・シークレットの取得
+
+SwitchBotアプリから認証情報を取得します:
+
+1. SwitchBotアプリを開く
+2. **プロフィール** → **設定** → **アプリバージョン** を10回タップ（開発者モード有効化）
+3. **開発者向けオプション** が表示される
+4. **トークン** と **シークレットキー** をコピー
+
+> 参考: [SwitchBot API v1.1 公式ドキュメント](https://github.com/OpenWonderLabs/SwitchBotAPI)
+
+### 2. secrets.h の作成
 
 `include/secrets.h` を作成し、以下の内容を設定:
 
@@ -36,9 +47,30 @@ M5Stack Tab5 (ESP32-P4) で SwitchBot スマート電球を制御するアプリ
 #endif
 ```
 
-### 2. devices.h の編集
+### 3. デバイスIDの取得
 
-`include/devices.h` でデバイスIDと名前を設定:
+デバイスIDはSwitchBot APIで取得します。以下のcurlコマンドで確認できます:
+
+```bash
+# 認証ヘッダーを生成してデバイス一覧を取得
+TOKEN="your-token"
+SECRET="your-secret"
+NONCE=$(uuidgen)
+T=$(date +%s000)
+SIGN=$(echo -n "${TOKEN}${T}${NONCE}" | openssl dgst -sha256 -hmac "${SECRET}" -binary | base64)
+
+curl -s "https://api.switch-bot.com/v1.1/devices" \
+  -H "Authorization: ${TOKEN}" \
+  -H "t: ${T}" \
+  -H "nonce: ${NONCE}" \
+  -H "sign: ${SIGN}" | jq
+```
+
+> 参考: [SwitchBot API - Get Device List](https://github.com/OpenWonderLabs/SwitchBotAPI#get-device-list)
+
+### 4. devices.h の編集
+
+`include/devices.h` で取得したデバイスIDと名前を設定:
 
 ```cpp
 inline BulbDevice bulbs[NUM_BULBS] = {
@@ -51,9 +83,7 @@ inline BulbDevice bulbs[NUM_BULBS] = {
 inline MeterDevice meter = {"METER_DEVICE_ID", "温湿度計", 0.0f, 0, false};
 ```
 
-デバイスIDはSwitchBot APIの `GET /v1.1/devices` で取得できます。
-
-### 3. ビルド & アップロード
+### 5. ビルド & アップロード
 
 ```bash
 # ビルド
