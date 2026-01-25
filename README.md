@@ -86,6 +86,71 @@ pio device monitor
 - [M5Unified](https://github.com/m5stack/M5Unified)
 - [M5GFX](https://github.com/m5stack/M5GFX)
 
+## Tab5 ビルド環境のトラブルシューティング
+
+### esptool エラー（click ライブラリの互換性問題）
+
+ビルド時に以下のエラーが出る場合:
+
+```
+TypeError: ParamType.get_metavar() missing 1 required positional argument: 'ctx'
+*** [.pio/build/m5stack-tab5/bootloader.bin] Error 1
+```
+
+**原因**: PlatformIOのPython環境にある `click` ライブラリが新しすぎて `esptool` と互換性がない
+
+**解決策**:
+```bash
+~/.platformio/penv/bin/pip install 'click<8.2'
+```
+
+### フラッシュサイズ不足（日本語フォント使用時）
+
+日本語フォント（lgfxJapanGothicなど）を使用するとフラッシュ容量を超える場合:
+
+```
+Error: The program size (1362473 bytes) is greater than maximum allowed (1310720 bytes)
+```
+
+**解決策**: `platformio.ini` でパーティションを変更:
+
+```ini
+board_build.partitions = huge_app.csv
+```
+
+### Tab5 の WiFi アーキテクチャ
+
+Tab5は以下の構成になっています:
+
+```
+ESP32-P4 (メインCPU) ←--SDIO--→ ESP32-C6 (WiFi/BT)
+```
+
+- WiFiはESP32-C6で処理され、ESP-Hostedフレームワークで通信
+- `WiFi.mode(WIFI_OFF)` で完全オフにすると再初期化不可
+- `WiFi.disconnect()` / `WiFi.reconnect()` のみ使用可能
+- WiFiピン設定が必要: `WiFi.setPins(CLK, CMD, D0, D1, D2, D3, RST)`
+
+### platformio.ini の設定例
+
+```ini
+[env:m5stack-tab5]
+platform = https://github.com/pioarduino/platform-espressif32.git#54.03.21
+board = esp32-p4-evboard
+board_build.mcu = esp32p4
+framework = arduino
+board_build.partitions = huge_app.csv
+
+build_flags =
+    -DBOARD_HAS_PSRAM
+    -DARDUINO_USB_MODE=1
+    -DARDUINO_USB_CDC_ON_BOOT=1
+
+lib_deps =
+    https://github.com/m5stack/M5Unified.git
+    https://github.com/m5stack/M5GFX.git
+```
+
 ## 注意事項
 
 - Tab5のWiFiはESP32-C6で処理されるため、`WiFi.mode(WIFI_OFF)` は使用不可
