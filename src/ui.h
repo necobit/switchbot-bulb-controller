@@ -16,4 +16,7 @@ void uiUpdateBulbState(int index, bool powerState, int brightness);
 // 温湿度表示を更新
 void uiUpdateMeter();
 
+// 全電球の状態を取得して更新
+void uiRefreshAllBulbStatus();
+
 #endif // UI_H

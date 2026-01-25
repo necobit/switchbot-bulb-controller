@@ -96,6 +96,9 @@ void setup() {
         meter.valid = true;
         uiUpdateMeter();
     }
+
+    // 起動時に全電球の状態を取得
+    uiRefreshAllBulbStatus();
 }
 
 // 温湿度更新間隔（ミリ秒）

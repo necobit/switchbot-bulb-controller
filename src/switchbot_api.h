@@ -25,4 +25,11 @@ bool switchbotBulbBrightness(const String& deviceId, int brightness);
 // 戻り値: 成功=true, 失敗=false
 bool switchbotMeterStatus(const String& deviceId, float& temperature, int& humidity);
 
+// 電球のステータス取得
+// deviceId: デバイスID
+// powerState: 取得した電源状態を格納
+// brightness: 取得した明るさを格納
+// 戻り値: 成功=true, 失敗=false
+bool switchbotBulbStatus(const String& deviceId, bool& powerState, int& brightness);
+
 #endif // SWITCHBOT_API_H

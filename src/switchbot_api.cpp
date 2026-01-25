@@ -164,3 +164,71 @@ bool switchbotMeterStatus(const String& deviceId, float& temperature, int& humid
     Serial.printf("Parsed: temp=%.1f, humidity=%d\n", temperature, humidity);
     return true;
 }
+
+bool switchbotBulbStatus(const String& deviceId, bool& powerState, int& brightness) {
+    if (deviceId.isEmpty()) {
+        Serial.println("Error: deviceId is empty");
+        return false;
+    }
+
+    WiFiClientSecure client;
+    client.setInsecure();
+
+    HTTPClient https;
+    String url = "https://api.switch-bot.com/v1.1/devices/" + deviceId + "/status";
+
+    // t は13桁ミリ秒（UNIXタイムスタンプ）
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    int64_t epochMs = (int64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000;
+    String t = String(epochMs);
+    String nonce = makeNonce();
+    String sign = makeSign(SWITCHBOT_TOKEN, SWITCHBOT_SECRET, t, nonce);
+
+    Serial.printf("Getting bulb status for %s\n", deviceId.c_str());
+
+    if (!https.begin(client, url)) {
+        Serial.println("Failed to begin HTTPS");
+        return false;
+    }
+
+    https.addHeader("Authorization", SWITCHBOT_TOKEN);
+    https.addHeader("t", t);
+    https.addHeader("nonce", nonce);
+    https.addHeader("sign", sign);
+
+    int code = https.GET();
+    String resp = https.getString();
+    https.end();
+
+    Serial.printf("HTTP %d\n%s\n", code, resp.c_str());
+
+    if (code < 200 || code >= 300) {
+        return false;
+    }
+
+    // 簡易JSONパース（powerとbrightnessを抽出）
+    int powerIdx = resp.indexOf("\"power\":");
+    int brightnessIdx = resp.indexOf("\"brightness\":");
+
+    if (powerIdx < 0 || brightnessIdx < 0) {
+        Serial.println("Failed to parse bulb response");
+        return false;
+    }
+
+    // power の値を抽出（"on" or "off"）
+    int powerStart = resp.indexOf("\"", powerIdx + 8) + 1;
+    int powerEnd = resp.indexOf("\"", powerStart);
+    String powerStr = resp.substring(powerStart, powerEnd);
+    powerState = (powerStr == "on");
+
+    // brightness の値を抽出
+    int brightStart = brightnessIdx + 13;
+    int brightEnd = resp.indexOf(",", brightStart);
+    if (brightEnd < 0) brightEnd = resp.indexOf("}", brightStart);
+    String brightStr = resp.substring(brightStart, brightEnd);
+    brightness = brightStr.toInt();
+
+    Serial.printf("Parsed: power=%s, brightness=%d\n", powerState ? "on" : "off", brightness);
+    return true;
+}

@@ -36,6 +36,11 @@ static unsigned long lastTouchTime = 0;
 static bool screenOff = false;
 #define SCREEN_OFF_TIMEOUT_MS 60000  // 1分間操作がなければ画面オフ
 
+// 状態取得機能
+static unsigned long lastStatusUpdate = 0;
+static bool operationOccurred = false;  // 操作が行われたかどうか
+#define STATUS_UPDATE_INTERVAL_MS 10000  // 操作後10秒ごとに状態取得
+
 // パネルの座標計算
 static int getPanelX(int index) {
     return PANEL_MARGIN + index * (PANEL_WIDTH + PANEL_MARGIN);
@@ -234,6 +239,8 @@ void uiUpdate() {
             screenOff = false;
             lastTouchTime = now;
             M5.Display.setBrightness(128);
+            // 画面復帰時に即時状態取得
+            uiRefreshAllBulbStatus();
         }
         return;  // 画面オフ中は他の処理をスキップ
     }
@@ -260,6 +267,8 @@ void uiUpdate() {
             // API呼び出し
             switchbotBulbPower(bulbs[btnIndex].deviceId, bulbs[btnIndex].powerState);
             lastApiCall = now;
+            operationOccurred = true;  // 操作フラグを設定
+            lastStatusUpdate = now;    // タイマーをリセット
             return;
         }
 
@@ -289,8 +298,16 @@ void uiUpdate() {
         if (now - lastApiCall >= API_DEBOUNCE_MS) {
             switchbotBulbBrightness(bulbs[activeSlider].deviceId, bulbs[activeSlider].brightness);
             lastApiCall = now;
+            operationOccurred = true;  // 操作フラグを設定
+            lastStatusUpdate = now;    // タイマーをリセット
         }
         activeSlider = -1;
+    }
+
+    // 操作後10秒ごとに状態取得
+    if (operationOccurred && (now - lastStatusUpdate >= STATUS_UPDATE_INTERVAL_MS)) {
+        uiRefreshAllBulbStatus();
+        operationOccurred = false;  // 一度取得したらフラグをクリア
     }
 }
 
@@ -304,4 +321,21 @@ void uiUpdateBulbState(int index, bool powerState, int brightness) {
 
 void uiUpdateMeter() {
     drawHeader();
+}
+
+void uiRefreshAllBulbStatus() {
+    Serial.println("Refreshing all bulb status...");
+    for (int i = 0; i < NUM_BULBS; i++) {
+        if (!bulbs[i].deviceId.isEmpty()) {
+            bool powerState;
+            int brightness;
+            if (switchbotBulbStatus(bulbs[i].deviceId, powerState, brightness)) {
+                bulbs[i].powerState = powerState;
+                bulbs[i].brightness = brightness;
+                drawBulbPanel(i);
+                Serial.printf("Bulb %d: power=%s, brightness=%d\n", i, powerState ? "on" : "off", brightness);
+            }
+        }
+    }
+    lastStatusUpdate = millis();
 }
