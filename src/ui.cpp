@@ -34,7 +34,11 @@ static unsigned long lastApiCall = 0;
 // 画面オフ機能
 static unsigned long lastTouchTime = 0;
 static bool screenOff = false;
-#define SCREEN_OFF_TIMEOUT_MS 60000  // 1分間操作がなければ画面オフ
+static bool screenDimming = false;  // 減光中フラグ
+static unsigned long dimmingStartTime = 0;  // 減光開始時刻
+#define SCREEN_OFF_TIMEOUT_MS 60000  // 1分間操作がなければ画面減光開始
+#define SCREEN_DIMMING_DURATION_MS 5000  // 減光から完全オフまで5秒
+#define SCREEN_DIM_BRIGHTNESS 13  // 減光時の明るさ（約10%）
 
 // 状態取得機能
 static unsigned long lastStatusUpdate = 0;
@@ -233,22 +237,31 @@ void uiUpdate() {
     auto touch = M5.Touch.getDetail();
     unsigned long now = millis();
 
-    // 画面オフ中にタッチされたら復帰
-    if (screenOff) {
+    // 画面オフ中または減光中にタッチされたら復帰
+    if (screenOff || screenDimming) {
         if (touch.wasPressed()) {
             screenOff = false;
+            screenDimming = false;
             lastTouchTime = now;
             M5.Display.setBrightness(128);
             // 画面復帰時に即時状態取得
             uiRefreshAllBulbStatus();
         }
-        return;  // 画面オフ中は他の処理をスキップ
+        return;  // 画面オフ/減光中は他の処理をスキップ
     }
 
-    // 1分間操作がなければ画面オフ
+    // 1分間操作がなければ画面減光開始
     if (now - lastTouchTime >= SCREEN_OFF_TIMEOUT_MS) {
-        screenOff = true;
-        M5.Display.setBrightness(0);
+        if (!screenDimming) {
+            screenDimming = true;
+            dimmingStartTime = now;
+            M5.Display.setBrightness(SCREEN_DIM_BRIGHTNESS);
+        }
+        // 減光開始から5秒後に完全オフ
+        if (now - dimmingStartTime >= SCREEN_DIMMING_DURATION_MS) {
+            screenOff = true;
+            screenDimming = false;
+        }
         return;
     }
 
