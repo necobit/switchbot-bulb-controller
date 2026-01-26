@@ -45,6 +45,11 @@ static unsigned long lastStatusUpdate = 0;
 static bool operationOccurred = false;  // 操作が行われたかどうか
 #define STATUS_UPDATE_INTERVAL_MS 10000  // 操作後10秒ごとに状態取得
 
+// 遅延OFF機能
+static int pendingOffBulbIndex = -1;  // OFF待ちの電球インデックス（-1=なし）
+static unsigned long pendingOffStartTime = 0;  // OFF待ち開始時刻
+#define BULB_OFF_DELAY_MS 5000  // OFF操作の遅延時間（5秒）
+
 // パネルの座標計算
 static int getPanelX(int index) {
     return PANEL_MARGIN + index * (PANEL_WIDTH + PANEL_MARGIN);
@@ -273,15 +278,28 @@ void uiUpdate() {
         // ボタンタッチ判定
         int btnIndex = checkButtonTouch(tx, ty);
         if (btnIndex >= 0 && !bulbs[btnIndex].deviceId.isEmpty()) {
+            bool wasOn = bulbs[btnIndex].powerState;
+
+            // この電球がOFF待ち中なら、キャンセル
+            if (pendingOffBulbIndex == btnIndex) {
+                pendingOffBulbIndex = -1;
+            }
+
             // 電源トグル
             bulbs[btnIndex].powerState = !bulbs[btnIndex].powerState;
             drawBulbPanel(btnIndex);
 
-            // API呼び出し
-            switchbotBulbPower(bulbs[btnIndex].deviceId, bulbs[btnIndex].powerState);
-            lastApiCall = now;
-            operationOccurred = true;  // 操作フラグを設定
-            lastStatusUpdate = now;    // タイマーをリセット
+            if (wasOn) {
+                // ON→OFF: 5秒後にOFFにする
+                pendingOffBulbIndex = btnIndex;
+                pendingOffStartTime = now;
+            } else {
+                // OFF→ON: 即座にONにする
+                switchbotBulbPower(bulbs[btnIndex].deviceId, true);
+                lastApiCall = now;
+                operationOccurred = true;
+                lastStatusUpdate = now;
+            }
             return;
         }
 
@@ -315,6 +333,19 @@ void uiUpdate() {
             lastStatusUpdate = now;    // タイマーをリセット
         }
         activeSlider = -1;
+    }
+
+    // 遅延OFF処理（5秒後にOFF）
+    if (pendingOffBulbIndex >= 0 && (now - pendingOffStartTime >= BULB_OFF_DELAY_MS)) {
+        int idx = pendingOffBulbIndex;
+        pendingOffBulbIndex = -1;
+        // まだOFF状態のままなら実行
+        if (!bulbs[idx].powerState) {
+            switchbotBulbPower(bulbs[idx].deviceId, false);
+            lastApiCall = now;
+            operationOccurred = true;
+            lastStatusUpdate = now;
+        }
     }
 
     // 操作後10秒ごとに状態取得
