@@ -70,6 +70,11 @@ static int pendingOffBulbIndex = -1;
 static unsigned long pendingOffStartTime = 0;
 #define BULB_OFF_DELAY_MS 5000
 
+// バッテリー監視
+static int batteryLevel = -1;
+static unsigned long lastBatteryUpdate = 0;
+#define BATTERY_UPDATE_INTERVAL_MS 10000
+
 // 座標計算
 static int getPanelX(int index) { return PANEL_MARGIN + index * (PANEL_WIDTH + PANEL_MARGIN); }
 static int getPanelY() { return HEADER_HEIGHT + PANEL_MARGIN; }
@@ -79,6 +84,12 @@ static int getButtonWidth() { return PANEL_WIDTH - 40; }
 static int getSliderX(int index) { return getPanelX(index) + SLIDER_MARGIN; }
 static int getSliderY() { return getButtonY() + BUTTON_HEIGHT + 40; }
 static int getSliderWidth() { return PANEL_WIDTH - SLIDER_MARGIN * 2; }
+
+// バッテリー状態更新
+static void updateBatteryStatus()
+{
+    batteryLevel = M5.Power.getBatteryLevel();
+}
 
 // ヘッダー描画（直接描画）
 static void drawHeader()
@@ -90,7 +101,20 @@ static void drawHeader()
     M5.Display.setTextDatum(ML_DATUM);
     M5.Display.drawString("SwitchBot Controller", 20, HEADER_HEIGHT / 2);
 
-    M5.Display.setFont(&fonts::FreeSansBold18pt7b);
+    // バッテリー表示（中央）
+    M5.Display.setTextDatum(MC_DATUM);
+    char battStr[16];
+    if (batteryLevel >= 0)
+    {
+        snprintf(battStr, sizeof(battStr), "BAT %d%%", batteryLevel);
+    }
+    else
+    {
+        strcpy(battStr, "BAT --");
+    }
+    M5.Display.drawString(battStr, SCREEN_WIDTH / 2, HEADER_HEIGHT / 2);
+
+    // 温湿度表示（右側）
     M5.Display.setTextDatum(MR_DATUM);
     if (meter.valid)
     {
@@ -238,6 +262,9 @@ void uiInit()
 
     // パネル用スプライト作成（1パネル分のみ）
     panelSprite.createSprite(PANEL_WIDTH, PANEL_HEIGHT);
+
+    // バッテリー状態初期化
+    updateBatteryStatus();
 
     lastTouchTime = millis();
     drawUI();
@@ -404,6 +431,18 @@ void uiUpdate()
     {
         uiRefreshAllBulbStatus();
         operationOccurred = false;
+    }
+
+    // バッテリー状態更新（10秒ごと）
+    if (now - lastBatteryUpdate >= BATTERY_UPDATE_INTERVAL_MS)
+    {
+        lastBatteryUpdate = now;
+        int oldLevel = batteryLevel;
+        updateBatteryStatus();
+        if (batteryLevel != oldLevel)
+        {
+            drawHeader();
+        }
     }
 }
 
